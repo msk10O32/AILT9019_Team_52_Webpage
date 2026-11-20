@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HKU Answer Check | Team 52</title>
+<meta name="description" content="A local prototype that checks AI-generated answers about HKU rules against saved official sources and shows the exact evidence behind each verdict.">
+<style>
+  :root {
+    --navy: #17365d;
+    --navy-deep: #10233f;
+    --blue: #2e75b6;
+    --blue-soft: #eaf1fb;
+    --ink: #1d2433;
+    --muted: #556274;
+    --line: #d7e0eb;
+    --line-strong: #b9c9dc;
+    --paper: #ffffff;
+    --bg: #f4f7fb;
+    --bg-soft: #eef4fb;
+    --green-ink: #1f5c38;
+    --green-bg: #e3f2e9;
+    --amber-ink: #7a4308;
+    --amber-bg: #fcefd9;
+    --red-ink: #8f2d2d;
+    --red-bg: #fbe9e9;
+    --radius: 14px;
+    --shadow: 0 16px 36px rgba(18, 43, 76, 0.10);
+    --max: 1120px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--navy); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--blue); }
+  :focus-visible { outline: 3px solid #8ab4e8; outline-offset: 3px; border-radius: 4px; }
+  .skip {
+    position: absolute;
+    left: 14px;
+    top: -60px;
+    z-index: 20;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--navy);
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: var(--shadow);
+  }
+  .skip:focus { top: 12px; }
+  .wrap { width: min(var(--max), calc(100% - 40px)); margin: 0 auto; }
+  code {
+    background: #eef2f8;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.06em 0.34em;
+    font-size: 0.92em;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  }
+  q { quotes: "\201c" "\201d"; }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    z-index: 0;
+    overflow: hidden;
+    padding: 58px 0 46px;
+    color: #fff;
+    background:
+      radial-gradient(900px 420px at 92% -20%, rgba(101, 166, 244, 0.42), transparent 64%),
+      linear-gradient(145deg, #0d1f39 0%, var(--navy) 58%, #225384 100%);
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: rgba(255,255,255,0.14);
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    gap: 44px;
+    align-items: center;
+  }
+  .hero h1 {
+    margin: 0;
+    font-size: clamp(2.25rem, 4.6vw, 3.35rem);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    max-width: 18ch;
+  }
+  .hero .lead {
+    margin: 20px 0 0;
+    max-width: 52ch;
+    color: #e7f0fa;
+    font-size: clamp(1.02rem, 1.5vw, 1.14rem);
+  }
+  .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.42);
+    color: #fff;
+    background: transparent;
+    text-decoration: none;
+    font-weight: 650;
+    font-size: 0.96rem;
+    transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+  }
+  .button:hover { background: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.7); color: #fff; }
+  .button.primary { color: var(--navy); background: #fff; border-color: #fff; }
+  .button.primary:hover { background: #eaf2fc; color: var(--navy); }
+  .hero .disclaimer {
+    margin: 26px 0 0;
+    max-width: 58ch;
+    color: #c3d5e8;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+
+  /* Hero evidence preview */
+  .verdict-preview {
+    background: #fff;
+    color: var(--ink);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 24px 60px rgba(4, 16, 33, 0.28);
+    overflow: hidden;
+  }
+  .vp-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    background: #f8fbff;
+  }
+  .vp-head strong { color: var(--navy); font-size: 0.95rem; }
+  .vp-head span { color: var(--muted); font-size: 0.78rem; }
+  .vp-row { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .vp-row:last-child { border-bottom: 0; }
+  .vp-row p { margin: 8px 0 0; font-size: 0.95rem; line-height: 1.45; }
+  .vp-row .vp-source { display: block; margin-top: 7px; color: var(--muted); font-size: 0.8rem; }
+  .vp-main { padding: 18px; }
+  .vp-claim { margin: 10px 0 0; font-size: 1rem; line-height: 1.45; font-weight: 600; }
+  .vp-quote { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #f5f9fe; color: #33445a; font-size: 0.88rem; line-height: 1.5; }
+  .vp-main .vp-source { display: block; margin-top: 9px; color: var(--muted); font-size: 0.8rem; }
+  .vp-foot { padding: 12px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .vp-foot .badge { font-size: 0.72rem; }
+
+  /* Navigation */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255,255,255,0.97);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(8px);
+  }
+  .nav .wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    padding: 11px 0;
+  }
+  .nav-brand { display: inline-flex; align-items: baseline; gap: 9px; margin-right: auto; white-space: nowrap; color: inherit; text-decoration: none; }
+  .nav-brand strong { color: var(--navy); font-size: 0.96rem; letter-spacing: -0.01em; }
+  .nav-brand span { color: var(--muted); font-size: 0.78rem; }
+  .nav-links { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 18px; }
+  .nav a.nav-link {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.88rem;
+    padding: 8px 0;
+    border-bottom: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .nav a.nav-link:hover { color: var(--navy); border-bottom-color: var(--navy); }
+  .nav-menu { display: none; position: relative; margin-left: auto; }
+  .nav-menu summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--navy);
+    font-size: 0.86rem;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .nav-menu summary::-webkit-details-marker { display: none; }
+  .nav-menu summary::after { content: " \25be"; color: var(--muted); margin-left: 5px; }
+  .nav-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    width: min(280px, calc(100vw - 28px));
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 6px;
+    z-index: 12;
+  }
+  .nav-panel a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 8px;
+    color: var(--navy);
+    text-decoration: none;
+    font-size: 0.92rem;
+  }
+  .nav-panel a:hover { background: var(--blue-soft); }
+
+  /* Sections */
+  main { padding: 46px 0 6px; }
+  section { padding: 0 0 52px; scroll-margin-top: 74px; }
+  .section-head { max-width: 72ch; margin-bottom: 20px; }
+  h2 {
+    margin: 0 0 7px;
+    color: var(--navy);
+    font-size: clamp(1.36rem, 2.3vw, 1.62rem);
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+  h3 { margin: 0 0 6px; color: var(--navy); font-size: 1rem; line-height: 1.35; }
+  .section-head p, .sub { margin: 0; color: var(--muted); max-width: 70ch; }
+  .small { font-size: 0.9rem; }
+  .muted { color: var(--muted); }
+  ul { margin: 0; padding-left: 20px; }
+  li { margin: 7px 0; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .grid.three { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 21px;
+  }
+  .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+
+  /* Open facts, no cards */
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  .fact { border-top: 2px solid var(--navy); padding-top: 14px; }
+  .fact h3 { font-size: 0.98rem; }
+  .fact p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  /* Pipeline as resize-proof HTML, not a scaled bitmap */
+  .flow {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .flow-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 13px;
+    border-radius: 9px;
+    background: var(--blue-soft);
+    color: var(--navy);
+    font-size: 0.86rem;
+    line-height: 1.45;
+  }
+  .flow-top strong { font-weight: 700; }
+  .flow-top .sep { color: var(--blue); font-weight: 800; }
+  .flow-row { display: flex; align-items: stretch; gap: 6px; }
+  .flow-node {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fbfdff;
+  }
+  .flow-node .num { color: var(--blue); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; }
+  .flow-node strong { color: var(--navy); font-size: 0.88rem; line-height: 1.3; }
+  .flow-node span:last-child { color: var(--muted); font-size: 0.78rem; line-height: 1.4; }
+  .flow-node.model { background: #fdf5e8; border-color: #e7d3b5; }
+  .flow-node.model .num { color: #8a570f; }
+  .flow-arrow { flex: 0 0 auto; display: flex; align-items: center; color: var(--blue); font-weight: 800; font-size: 1.1rem; }
+  .flow-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .flow-note { border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; font-size: 0.82rem; line-height: 1.45; color: var(--muted); }
+  .flow-note strong { display: block; color: var(--navy); font-size: 0.84rem; margin-bottom: 1px; }
+  .flow-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 0.78rem; }
+  .flow-legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .flow-legend .swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #e7d3b5; background: #fdf5e8; }
+  .flow-legend .swatch.local { border-color: #c9d9ec; background: #f5f9fe; }
+  .stages { counter-reset: stage; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; }
+  .stages li {
+    position: relative;
+    margin: 0;
+    padding: 9px 12px 9px 42px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fbfdff;
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .stages li::before {
+    counter-increment: stage;
+    content: counter(stage);
+    position: absolute;
+    left: 12px;
+    top: 9px;
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    background: var(--blue-soft);
+    color: var(--navy);
+    font-weight: 750;
+    font-size: 0.76rem;
+    display: grid;
+    place-items: center;
+  }
+
+  /* Split */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 620px; }
+  th, td { text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 0.92rem; }
+  th { background: #f1f6fc; color: var(--navy); font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: #fbfdff; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 750;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+  .badge.supported { color: var(--green-ink); background: var(--green-bg); }
+  .badge.contradicted { color: var(--red-ink); background: var(--red-bg); }
+  .badge.notcovered { color: var(--amber-ink); background: var(--amber-bg); }
+
+  /* Evaluation */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--paper);
+    overflow: hidden;
+  }
+  .stat { padding: 15px 18px; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat .value { display: block; color: var(--navy); font-size: 1.42rem; font-weight: 780; line-height: 1.15; letter-spacing: -0.02em; }
+  .stat .label { display: block; margin-top: 3px; color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+  .stat .n { color: var(--muted); font-size: 0.74rem; white-space: nowrap; }
+
+  /* Boundary note */
+  .boundary {
+    border: 1px solid #e7d3b5;
+    border-radius: 12px;
+    background: #fdf7ec;
+    padding: 18px;
+  }
+  .boundary h3 { color: #6b3c08; }
+  .boundary p { margin: 0; color: #62431b; font-size: 0.92rem; }
+  .scope-note { margin-top: 12px; color: var(--muted); font-size: 0.88rem; max-width: 72ch; }
+
+  /* Run */
+  .run-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 20px; align-items: start; }
+  .run-grid > * { min-width: 0; }
+  .pipeline, .split > * { min-width: 0; }
+  pre {
+    margin: 0;
+    padding: 18px;
+    overflow-x: auto;
+    background: var(--navy-deep);
+    color: #eaf2fc;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  pre code { background: none; border: 0; padding: 0; color: inherit; font-size: 1em; }
+  .run-note { margin: 12px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+  footer {
+    margin-top: 16px;
+    padding: 28px 0;
+    background: var(--navy-deep);
+    color: #c8d8ea;
+    font-size: 0.88rem;
+  }
+  footer a { color: #e1eefb; }
+  footer .row { display: flex; flex-wrap: wrap; gap: 14px 28px; justify-content: space-between; align-items: baseline; }
+  footer strong { color: #fff; }
+
+  /* Motion */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-copy > * { animation: rise .55s ease both; }
+    .hero-copy .lead { animation-delay: .06s; }
+    .hero-copy .actions { animation-delay: .12s; }
+    .hero-copy .disclaimer { animation-delay: .18s; }
+    .verdict-preview { animation: rise .65s .1s ease both; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 30px; }
+    .hero h1 { max-width: 18ch; }
+    .run-grid { grid-template-columns: 1fr; }
+    .verdict-preview { max-width: 620px; }
+  }
+  @media (max-width: 760px) {
+    .wrap { width: calc(100% - 32px); }
+    .hero { padding: 40px 0 34px; }
+    .hero .lead { font-size: 1rem; }
+    .nav .wrap { padding: 8px 0; gap: 12px; flex-wrap: nowrap; overflow: hidden; }
+    .nav-brand { flex: 0 0 auto; }
+    .nav-links {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-wrap: nowrap;
+      gap: 14px;
+      overflow-x: auto;
+      padding: 2px 0;
+      scrollbar-width: none;
+    }
+    .nav-links::-webkit-scrollbar { display: none; }
+    .nav-links a.nav-link {
+      display: flex;
+      align-items: center;
+      min-height: 40px;
+      padding: 0;
+      font-size: 0.84rem;
+    }
+    .nav-brand span { font-size: 0.74rem; }
+    .facts { grid-template-columns: 1fr; gap: 18px; }
+    .facts .fact { border-top-width: 1px; }
+    .split, .stats { grid-template-columns: 1fr; }
+    .flow-row { flex-direction: column; }
+    .flow-arrow { justify-content: center; transform: rotate(90deg); padding: 1px 0; }
+    .flow-notes { grid-template-columns: 1fr; }
+    .stages { grid-template-columns: 1fr; }
+    .stat { border-right: 0; border-bottom: 1px solid var(--line); }
+    .stat:last-child { border-bottom: 0; }
+    section { padding-bottom: 40px; scroll-margin-top: 70px; }
+    main { padding-top: 34px; }
+    .table-wrap { overflow: visible; border: 0; background: transparent; }
+    table { min-width: 0; }
+    thead { display: none; }
+    tbody, tr, td { display: block; width: 100%; }
+    tr {
+      margin: 0 0 12px;
+      padding: 5px 0;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    tr:last-child { margin-bottom: 0; }
+    td { border: 0; padding: 6px 14px; }
+    td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 750;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  }
+  @media (max-width: 420px) {
+    .hero h1 { font-size: 2rem; }
+    .button { width: 100%; justify-content: center; }
+    .nav-brand span { display: none; }
+    .vp-head { display: block; }
+    .vp-head span { display: block; margin-top: 2px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <h1>HKU Answer Check</h1>
+      <p class="lead">A local prototype that checks AI-generated answers about HKU rules, claim by claim, against saved official sources. Supported and contradicted verdicts show the exact quoted passage and the snapshot date.</p>
+      <div class="actions">
+        <a class="button primary" href="#example">See the evidence</a>
+        <a class="button" href="https://github.com/msk10O32/AILT9019_Team_52">GitHub repository</a>
+      </div>
+      <p class="disclaimer">Not official HKU advice. It does not decide enrolment, credit transfer or graduation eligibility; always check the linked official page.</p>
+    </div>
+
+    <aside class="verdict-preview" aria-label="One example verdict from a recorded run">
+      <div class="vp-head">
+        <strong>One example verdict</strong>
+        <span>from a recorded run</span>
+      </div>
+      <div class="vp-main">
+        <span class="badge contradicted">contradicted</span>
+        <p class="vp-claim">Add/drop ends on 30 September 2026.</p>
+        <blockquote class="vp-quote"><q>End of Add/Drop Period After September 15, 2026 (Tue) (4:00 pm)</q></blockquote>
+        <span class="vp-source">AAS Important Academic Dates, snapshot 24 Oct 2026</span>
+      </div>
+      <div class="vp-foot">Also returns <span class="badge supported">supported</span> and <span class="badge notcovered">not covered</span>.</div>
+    </aside>
+  </div>
+</header>
+
+<nav class="nav" aria-label="Page sections">
+  <div class="wrap">
+    <a class="nav-brand" href="#top"><strong>HKU Answer Check</strong><span>Team 52 &middot; AILT9019</span></a>
+    <div class="nav-links">
+      <a class="nav-link" href="#problem">Why</a>
+      <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" href="#example">Example</a>
+      <a class="nav-link" href="#built">What we built</a>
+      <a class="nav-link" href="#domain">Domain</a>
+      <a class="nav-link" href="#evaluation">Evaluation</a>
+      <a class="nav-link" href="#limits">Limitations</a>
+      <a class="nav-link" href="#run">Run locally</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main" class="wrap">
+
+  <section id="problem">
+    <div class="section-head">
+      <h2>Why this exists</h2>
+      <p>AI answers about university rules can sound convincing while being wrong, outdated or unsupported. The prototype is deliberately narrow so that the evidence can be checked.</p>
+    </div>
+    <div class="facts">
+      <div class="fact">
+        <h3>The problem</h3>
+        <p>Students ask chatbots about add/drop dates, course credits and programme rules. The answer is fluent, but it may not match the official page and usually gives no citation.</p>
+      </div>
+      <div class="fact">
+        <h3>Who it is for</h3>
+        <p>HKU students who want to check an AI-generated answer before acting on it. Scope: academic year 2026-27 and the BEng Computer Science programme.</p>
+      </div>
+      <div class="fact">
+        <h3>What it does not do</h3>
+        <p>It does not decide personal eligibility, credit transfer, enrolment or graduation. Subjective and personal-eligibility claims are reported as <code>not covered</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="section-head">
+      <h2>How it works</h2>
+      <p>The model does the language work. Retrieval and evidence validation stay local, deterministic and reproducible.</p>
+    </div>
+    <div class="flow" role="group" aria-label="Five-stage pipeline: local web UI, claim splitting by the course model, local BM25 retrieval, model comparison, local evidence validation, and verdict cards.">
+      <div class="flow-top">
+        <strong>Local web UI</strong><span class="sep" aria-hidden="true">&rarr;</span><span>POST /api/check</span><span class="sep" aria-hidden="true">&rarr;</span><span>background job</span><span>&middot; 127.0.0.1 only</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node model"><span class="num">1</span><strong>Split claims</strong><span>course model &middot; fixed JSON</span></div>
+        <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+        <div class="flow-node local"><span class="num">2</span><strong>BM25 retrieval</strong><span>274 passages &middot; top 4</span></div>
+        <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+        <div class="flow-node model"><span class="num">3</span><strong>Compare claim</strong><span>claim + its passages</span></div>
+        <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+        <div class="flow-node local"><span class="num">4</span><strong>Validate quotes</strong><span>quote + passage id</span></div>
+        <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+        <div class="flow-node local"><span class="num">5</span><strong>Verdict cards</strong><span>supported / contradicted / not covered</span></div>
+      </div>
+      <div class="flow-notes">
+        <div class="flow-note"><strong>Committed snapshots</strong>AAS dates, HKU Calendar regulations and BEng(CompSc) syllabus. Snapshot 24 Oct 2026.</div>
+        <div class="flow-note"><strong>Out-of-scope filter</strong>Opinions and personal-eligibility claims become <code>not covered</code> without a verification call.</div>
+      </div>
+      <div class="flow-legend">
+        <span class="key"><span class="swatch"></span>Course model / API</span>
+        <span class="key"><span class="swatch local"></span>Team-built, local and deterministic</span>
+      </div>
+    </div>
+    <ol class="stages">
+      <li><strong>Paste an answer.</strong> The local web UI sends it to the local server as a background job.</li>
+      <li><strong>Split into claims.</strong> The course model uses a fixed JSON prompt; a deterministic sentence splitter is the fallback if the call fails.</li>
+      <li><strong>Retrieve evidence.</strong> A local BM25 index searches 274 passages from three saved official HKU snapshots and returns the best-matching passages for each claim.</li>
+      <li><strong>Compare.</strong> The model receives one claim and its passages and must return a JSON verdict with a reason and evidence.</li>
+      <li><strong>Validate evidence.</strong> Our code checks that the passage id was retrieved and the quote exists verbatim in the saved source; failures become <code>not covered</code>.</li>
+    </ol>
+  </section>
+
+  <section id="example">
+    <div class="section-head">
+      <h2>Example run</h2>
+      <p>A recorded live run on three claims about HKU rules, showing the claim, the verdict and the exact passage behind it.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Claim</th><th>Verdict</th><th>Evidence</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="Claim">The add/drop period for Semester 1 in 2026-27 ends on 30 September 2026.</td>
+            <td data-label="Verdict"><span class="badge contradicted">contradicted</span></td>
+            <td data-label="Evidence"><q>End of Add/Drop Period After September 15, 2026 (Tue) (4:00 pm)</q><br><span class="small muted">AAS Important Academic Dates, snapshot 24 Oct 2026</span></td>
+          </tr>
+          <tr>
+            <td data-label="Claim">COMP2113 Programming technologies is a 6-credit course.</td>
+            <td data-label="Verdict"><span class="badge supported">supported</span></td>
+            <td data-label="Evidence"><q>10 COMP2113. Programming technologies (6 credits)</q><br><span class="small muted">BEng(CompSc) Regulations &amp; Syllabus, snapshot 24 Oct 2026</span></td>
+          </tr>
+          <tr>
+            <td data-label="Claim">COMP2113 is the easiest course at HKU.</td>
+            <td data-label="Verdict"><span class="badge notcovered">not covered</span></td>
+            <td data-label="Evidence">Subjective judgement, deliberately out of scope. The app refuses instead of guessing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="scope-note">The app's demo mode replays this recorded run, so it works without an API key. A live run uses the course Team Token Plan model configured in the local settings panel.</p>
+  </section>
+
+  <section id="built">
+    <div class="section-head">
+      <h2>What we built, what the model does</h2>
+      <p>The model supplies two language steps. Everything around it is team code, tested locally.</p>
+    </div>
+    <div class="split">
+      <div class="card">
+        <h3>Team-built, local</h3>
+        <ul class="small">
+          <li>Corpus pipeline: fetch, clean, chunk and snapshot official pages, including PDF text extraction.</li>
+          <li>Local BM25 index over the saved passages, with top-4 retrieval per claim.</li>
+          <li>Quote and passage-id validator; fabricated citations downgrade to <code>not covered</code>.</li>
+          <li>Out-of-scope handling for subjective and personal-eligibility claims.</li>
+          <li>Local web interface, server, trusted-source manager, offline replay and 138 automated tests.</li>
+          <li>Read-only pre-start check that compares live page hashes with the committed snapshot.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Course model / API</h3>
+        <ul class="small">
+          <li>Splits an answer into atomic claims with a fixed JSON prompt.</li>
+          <li>Compares one claim with the passages retrieved for it.</li>
+          <li>Returns a JSON verdict, reason and quoted evidence.</li>
+        </ul>
+        <p class="small muted" style="margin-top:12px">No fine-tuning, no embedding model and no live web search at check time. The model never sees the whole corpus; it only sees the passages selected for one claim.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="domain">
+    <div class="section-head">
+      <h2>Domain customisation</h2>
+      <p>The corpus is a versioned snapshot of three official HKU sources, not a generic web index.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Source</th><th>What it covers</th><th>Snapshot</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="Source"><a href="https://aas.hku.hk/important-academic-dates/">Important Academic Dates 2026-27 (AAS)</a></td>
+            <td data-label="What it covers">Semester dates, add/drop periods, assessment periods and deadlines.</td>
+            <td data-label="Snapshot">24 Oct 2026</td>
+          </tr>
+          <tr>
+            <td data-label="Source"><a href="https://calendar.hku.hk/regulations-for-first-degree-curricula/">Regulations for First Degree Curricula (HKU Calendar)</a></td>
+            <td data-label="What it covers">University regulations that apply across degree curricula.</td>
+            <td data-label="Snapshot">24 Oct 2026</td>
+          </tr>
+          <tr>
+            <td data-label="Source"><a href="https://csai.cds.hku.hk/RegulationAndSyllabus/">BEng(CompSc) Regulations &amp; Syllabus 2026-27</a></td>
+            <td data-label="What it covers">Programme requirements, course codes, credits and course descriptions.</td>
+            <td data-label="Snapshot">24 Oct 2026</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="scope-note"><strong>What we customised:</strong> course-code, month and <code>add/drop</code> normalisation; a three-verdict schema including <code>not covered</code>; and versioned snapshots with URL, retrieval date and SHA-256.</p>
+    <p class="scope-note">274 passages in total. The prototype is English-only: the corpus is English and the tokenizer indexes Latin words and numbers.</p>
+  </section>
+
+  <section id="evaluation">
+    <div class="section-head">
+      <h2>Evaluation</h2>
+      <p>A small labelled evaluation of the full checking pipeline. It is a smoke test, not a large-sample accuracy claim.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="value">10/10</span><span class="label">verdicts matched <span class="n">n=10</span></span></div>
+      <div class="stat"><span class="value">8/8</span><span class="label">quotes found verbatim <span class="n">n=8</span></span></div>
+      <div class="stat"><span class="value">2/2</span><span class="label">out-of-scope items refused <span class="n">n=2</span></span></div>
+    </div>
+    <p class="scope-note">The 10-item test set mixes supported, contradicted and not-covered claims. Results and the test procedure are in <a href="https://github.com/msk10O32/AILT9019_Team_52/blob/main/eval/results_2026-10-24.md">the repository evaluation record</a>.</p>
+  </section>
+
+  <section id="limits">
+    <div class="section-head">
+      <h2>Limitations and failure cases</h2>
+      <p>The system is intentionally narrow. Known gaps are stated instead of hidden.</p>
+    </div>
+    <div class="split">
+      <div class="card">
+        <h3>Known limitations</h3>
+        <ul class="small">
+          <li><strong>English only.</strong> The corpus is English and the BM25 tokenizer indexes Latin words and numbers; non-English claims retrieve no passages and are reported as <code>not covered</code>.</li>
+          <li><strong>Lexical retrieval.</strong> Synonyms and paraphrases can produce a false <code>not covered</code>. We prefer an honest refusal over a guess.</li>
+          <li><strong>Snapshots can age.</strong> Pages may change after the snapshot date. The launcher checks for updates before the server starts; rebuilding the snapshot is a separate, explicit step.</li>
+          <li><strong>The model can still be wrong.</strong> Quote checking proves the quoted text exists, not that the verdict is correct.</li>
+        </ul>
+      </div>
+      <div class="boundary">
+        <h3>A failure mode we expect</h3>
+        <p>A claim that says <q>students can withdraw from a course after the second week</q> uses “withdraw”, while the official page uses <q>add/drop period</q>. BM25 does not know those terms are related, so it may miss the rule and the claim comes back as <code>not covered</code>.</p>
+        <p class="scope-note">That is a lexical-retrieval false negative, not a model answer. The app prefers an honest refusal to a guess.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="run">
+    <div class="section-head">
+      <h2>Run it locally</h2>
+      <p>Python 3.10 or newer. No <code>pip install</code>: the app only uses the standard library and a local browser UI.</p>
+    </div>
+    <div class="run-grid">
+      <div>
+        <pre><code>git clone https://github.com/msk10O32/AILT9019_Team_52
+cd AILT9019_Team_52
+python app.py</code></pre>
+        <p class="run-note">Open <code>http://127.0.0.1:8765/</code>. On Windows you can double-click <code>run.bat</code>; on macOS or Linux run <code>./run.sh</code>. The launchers check the official pages for updates before starting and then start the app either way.</p>
+      </div>
+      <div class="card">
+        <h3>Add a key, or use the demo</h3>
+        <p class="small muted">Paste an OpenAI-compatible API key in <strong>API settings</strong>, then press <strong>Check answer</strong>. Without a key, the <strong>Load demo answer</strong> button replays the recorded run.</p>
+        <p class="small" style="margin-bottom:0"><a href="https://github.com/msk10O32/AILT9019_Team_52#readme">Full setup and architecture in the README</a><br><a href="https://github.com/msk10O32/AILT9019_Team_52">Source code on GitHub</a></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap row">
+    <div><strong>HKU Answer Check</strong><br>AILT9019 AI Literacy II &middot; Team 52 &middot; 2026-27</div>
+    <div><a href="https://github.com/msk10O32/AILT9019_Team_52">Repository</a> &middot; <a href="https://github.com/msk10O32/AILT9019_Team_52#readme">README</a></div>
+    <div>Not official HKU advice. Sources: aas.hku.hk &middot; calendar.hku.hk &middot; csai.cds.hku.hk.</div>
+  </div>
+</footer>
+
+</body>
+</html>
